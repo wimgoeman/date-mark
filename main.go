@@ -6,32 +6,28 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
-	"sync"
 )
+
+var transactionLog *TransactionLog
 
 func main() {
 	log.Println("Starting")
 
 	pathFlag := flag.String("path", ".", "path to scan for pictures")
-	threadsFlag := flag.Int("threads", 4, "parallel threads to use")
+	trxFlag := flag.String("transactions", "", "path to transaction log")
+
 	flag.Parse()
 
-	start(*pathFlag, *threadsFlag)
+	start(*pathFlag, *trxFlag)
 
 	log.Println("Done")
 }
 
-func start(path string, threads int) {
+func start(path string, trxPath string) {
+	transactionLog = openTransactionLog(trxPath)
+	defer transactionLog.close()
 
-	waitGroup := sync.WaitGroup{}
-	pathChan := make(chan string)
-
-	for i := 0; i < threads; i++ {
-		waitGroup.Add(1)
-		go worker(&waitGroup, i, pathChan)
-	}
-
-	filepath.WalkDir(path, func(path string, d fs.DirEntry, err error) error {
+	filepath.WalkDir(path, func(path string, d fs.DirEntry, _ error) error {
 		if d.IsDir() {
 			return nil
 		}
@@ -41,29 +37,28 @@ func start(path string, threads int) {
 			return nil
 		}
 
-		pathChan <- path
+		if transactionLog.find(path) != nil {
+			return nil
+		}
+
+		text, err := processFile(path)
+		var errText string
+		if err == nil {
+			errText = ""
+		} else {
+			errText = err.Error()
+		}
+		transactionLog.addTransaction(path, err == nil, text, errText)
 		return nil
 	})
-
-	close(pathChan)
-	waitGroup.Wait()
 }
 
-func worker(waitGroup *sync.WaitGroup, id int, pathChan chan string) {
-	defer waitGroup.Done()
-
-	for path := range pathChan {
-		processFile(path)
-	}
-}
-
-func processFile(path string) {
+func processFile(path string) (string, error) {
 	t, h, err := readInfoFromImage(path)
 	if err != nil {
-		log.Println(path, err)
-		return
+		return "", err
 	}
 	text := t.Format("02 Jan 06 15:04:05")
-	log.Println(path, text)
-	addTextToImage(path, path+".2.jpg", text, h/20)
+	err = addTextToImage(path, path, text, h/20)
+	return text, err
 }
