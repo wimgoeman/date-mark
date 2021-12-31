@@ -25,7 +25,7 @@ func openTransactionLog(path string) *TransactionLog {
 		transactions: make([]Transaction, 0),
 	}
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0666)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0644)
 	if err != nil {
 		log.Panic("Failed to open transaction log,", err)
 	}

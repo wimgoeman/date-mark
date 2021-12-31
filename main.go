@@ -1,39 +1,66 @@
 package main
 
 import (
-	"flag"
+	"fmt"
 	"io/fs"
 	"log"
+	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
 
 var transactionLog *TransactionLog
+var wd string
+var extensions [5]string = [5]string{"jpg", "jpeg", "png", "tif", "tiff"}
 
 func main() {
-	log.Println("Starting")
+	var err error
+	wd, err = os.Getwd()
+	if err != nil {
+		panic(fmt.Sprint("Failed to determine working dir,", err))
+	}
 
-	pathFlag := flag.String("path", ".", "path to scan for pictures")
-	trxFlag := flag.String("transactions", "", "path to transaction log")
+	// Init logging to file
+	logPath := path.Join(wd, "date-mark.log")
+	logFile, err := os.OpenFile(logPath, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0644)
+	if err != nil {
+		panic(fmt.Sprint("Failed to open log file", err))
+	}
+	defer logFile.Close()
+	log.SetOutput(logFile)
+	log.SetFlags(log.Lshortfile | log.LstdFlags)
 
-	flag.Parse()
+	parseConfig()
+	log.Println("Parsed config: ", config)
+	log.Println("Starting...")
 
-	start(*pathFlag, *trxFlag)
+	start()
 
-	log.Println("Done")
+	log.Println("Completed succesful")
 }
 
-func start(path string, trxPath string) {
-	transactionLog = openTransactionLog(trxPath)
+func start() {
+	for _, dirCfg := range config.Dirs {
+		processDir(&dirCfg)
+	}
+}
+
+func processDir(cfg *DirConfig) {
+	log.Println("Processing", cfg.Path)
+	trxLogPath := cfg.LogPath
+	if !path.IsAbs(trxLogPath) {
+		trxLogPath = path.Join(wd, trxLogPath)
+	}
+	transactionLog = openTransactionLog(trxLogPath)
 	defer transactionLog.close()
 
-	filepath.WalkDir(path, func(path string, d fs.DirEntry, _ error) error {
+	filepath.WalkDir(cfg.Path, func(path string, d fs.DirEntry, _ error) error {
 		if d.IsDir() {
 			return nil
 		}
 
-		lowerpath := strings.ToLower(path)
-		if !strings.HasSuffix(lowerpath, ".jpg") && !strings.HasSuffix(lowerpath, ".jpeg") {
+		if !hasImageExtension(path) {
 			return nil
 		}
 
@@ -54,6 +81,7 @@ func start(path string, trxPath string) {
 }
 
 func processFile(path string) (string, error) {
+	log.Println("Processing file", path)
 	t, h, err := readInfoFromImage(path)
 	if err != nil {
 		return "", err
@@ -61,4 +89,14 @@ func processFile(path string) (string, error) {
 	text := t.Format("02 Jan 06 15:04:05")
 	err = addTextToImage(path, path, text, h/20)
 	return text, err
+}
+
+func hasImageExtension(path string) bool {
+	lowerPath := strings.ToLower(path)
+	for _, validExt := range extensions {
+		if strings.HasSuffix(lowerPath, validExt) {
+			return true
+		}
+	}
+	return false
 }

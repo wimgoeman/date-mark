@@ -19,12 +19,10 @@ func addTextToImage(inPath string, outPath string, text string, fontSize int) er
 		outPath,
 	}
 
-	fmt.Println(command)
-
 	magickOut := strings.Builder{}
 	magickErr := strings.Builder{}
 
-	c := exec.Command(MAGICK_CMD, command...)
+	c := exec.Command(config.Magick, command...)
 	c.Stdout = &magickOut
 	c.Stderr = &magickErr
 
