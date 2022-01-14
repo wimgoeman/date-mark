@@ -68,27 +68,39 @@ func processDir(cfg *DirConfig) {
 			return nil
 		}
 
-		text, err := processFile(path)
+		text, success, err := processFile(path)
 		var errText string
 		if err == nil {
 			errText = ""
 		} else {
 			errText = err.Error()
 		}
-		transactionLog.addTransaction(path, err == nil, text, errText)
+		transactionLog.addTransaction(path, success, text, errText)
 		return nil
 	})
 }
 
-func processFile(path string) (string, error) {
+func processFile(path string) (string, bool, error) {
 	log.Println("Processing file", path)
-	t, h, err := readInfoFromImage(path)
-	if err != nil {
-		return "", err
+	t, h, exifErr := readInfoFromExif(path)
+	if exifErr == nil {
+		text := t.Format("02 Jan 06 15:04:05")
+		err := addTextToImage(path, path, text, h/20)
+		return text, true, err
+	} else {
+		fsT, fsH, fsErr := readInfoFromFile(path)
+		if fsErr == nil {
+			text := fsT.Format("02 Jan 06 15:04:05")
+			err := addTextToImage(path, path, text, fsH/20)
+			if err == nil {
+				return text, true, exifErr
+			} else {
+				return text, false, err
+			}
+		} else {
+			return "", false, fsErr
+		}
 	}
-	text := t.Format("02 Jan 06 15:04:05")
-	err = addTextToImage(path, path, text, h/20)
-	return text, err
 }
 
 func hasImageExtension(path string) bool {

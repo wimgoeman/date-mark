@@ -2,13 +2,16 @@ package main
 
 import (
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"os"
 	"time"
 
 	"github.com/rwcarlsen/goexif/exif"
 )
 
-func readInfoFromImage(path string) (time.Time, int, error) {
+func readInfoFromExif(path string) (time.Time, int, error) {
 	var t time.Time
 	var h int
 	f, err := os.Open(path)
@@ -41,6 +44,31 @@ func readInfoFromImage(path string) (time.Time, int, error) {
 	if err != nil {
 		return t, h, fmt.Errorf("could not read height as int, %w", err)
 	}
+
+	return t, h, nil
+}
+
+func readInfoFromFile(path string) (time.Time, int, error) {
+	var t time.Time
+	var h int
+
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return t, h, fmt.Errorf("error while getting file info, %w", err)
+	}
+	t = fileInfo.ModTime()
+
+	f, err := os.Open(path)
+	if err != nil {
+		return t, h, fmt.Errorf("error while reading file, %w", err)
+	}
+	defer f.Close()
+
+	m, _, err := image.Decode(f)
+	if err != nil {
+		return t, h, fmt.Errorf("error while reading image data, %w", err)
+	}
+	h = m.Bounds().Dy()
 
 	return t, h, nil
 }
